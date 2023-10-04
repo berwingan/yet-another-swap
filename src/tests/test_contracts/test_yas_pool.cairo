@@ -464,6 +464,67 @@ mod YASPoolTests {
         }
     }
 
+    mod Flash {
+        use yas::contracts::yas_pool::YASPool::InternalTrait;
+        use super::{deploy, mock_contract_states};
+
+        use starknet::{ContractAddress, ClassHash, SyscallResultTrait, contract_address_const};
+        use starknet::syscalls::deploy_syscall;
+        use starknet::testing::{set_contract_address, set_caller_address};
+
+        use yas::contracts::yas_pool::{
+            YASPool, YASPool::ContractState, YASPool::YASPoolImpl, YASPool::InternalImpl, IYASPool,
+            IYASPoolDispatcher, IYASPoolDispatcherTrait
+        };
+        use yas::contracts::yas_factory::{
+            YASFactory, IYASFactory, IYASFactoryDispatcher, IYASFactoryDispatcherTrait
+        };
+        use yas::contracts::yas_router::{
+            YASRouter, IYASRouterDispatcher, IYASRouterDispatcherTrait
+        };
+        use yas::numbers::fixed_point::implementations::impl_64x96::{
+            FP64x96Impl, FixedType, FixedTrait
+        };
+        use yas::libraries::tick::{Tick, Tick::TickImpl};
+        use yas::libraries::tick_math::{TickMath::MIN_TICK, TickMath::MAX_TICK};
+        use yas::libraries::position::{Info, Position, Position::PositionImpl, PositionKey};
+        use yas::tests::utils::constants::PoolConstants::{TOKEN_A, TOKEN_B};
+        use yas::tests::utils::constants::FactoryConstants::{FeeAmount, fee_amount, tick_spacing};
+        use yas::contracts::yas_erc20::{ERC20, ERC20::ERC20Impl, IERC20Dispatcher};
+        use yas::numbers::signed_integer::{
+            i32::i32, i32::i32_div_no_round, integer_trait::IntegerTrait
+        };
+        //TODO: uninitialized
+        mod NoLiquidity{
+        }
+        mod WithLiquidity{
+            use super::super::setup;
+            use yas::contracts::yas_pool::{
+                YASPool, YASPool::ContractState, YASPool::InternalImpl, IYASPool,
+                IYASPoolDispatcher, IYASPoolDispatcherTrait
+            };
+            use yas::contracts::yas_erc20::IERC20DispatcherTrait;
+
+            #[test]
+            #[available_gas(200000000)]
+            #[should_panic(expected: ('invalid callback_contract', 'ENTRYPOINT_FAILED'))]
+            fn test_invalid_callback_contract() {
+                    let (yas_pool, token_0, token_1) = setup();
+
+                    let balance_token_0 = token_0.balanceOf(yas_pool.contract_address);
+                    let balance_token_1 = token_1.balanceOf(yas_pool.contract_address);
+
+                    assert(balance_token_0 == 9996, 'wrong balance token 0');
+                    assert(balance_token_1 == 1000, 'wrong balance token 1');
+                    let mut x = ArrayTrait::<felt252>::new();
+                    yas_pool.flash(10,10,x);
+                }
+
+
+        }
+
+    }
+
     mod Mint {
         use yas::contracts::yas_pool::YASPool::InternalTrait;
         use super::{deploy, mock_contract_states};

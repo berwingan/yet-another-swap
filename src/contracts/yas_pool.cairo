@@ -21,6 +21,12 @@ trait IYASPool<TContractState> {
         amount: u128,
         data: Array<felt252>
     ) -> (u256, u256);
+    fn flash(
+        ref self: TContractState,
+        amount0: u256,
+        amount1: u256,
+        data: Array<felt252>
+    );
     fn token_0(self: @TContractState) -> ContractAddress;
     fn token_1(self: @TContractState) -> ContractAddress;
 }
@@ -37,6 +43,9 @@ mod YASPool {
     };
     use yas::interfaces::interface_yas_swap_callback::{
         IYASSwapCallbackDispatcherTrait, IYASSwapCallbackDispatcher
+    };
+    use yas::interfaces::interface_yas_flash_callback::{
+        IYASFlashCallbackDispatcherTrait, IYASFlashCallbackDispatcher
     };
     use yas::libraries::liquidity_math::LiquidityMath;
     use yas::libraries::position::{Position, Position::PositionImpl, PositionKey, Info};
@@ -64,6 +73,7 @@ mod YASPool {
         Initialize: Initialize,
         SwapExecuted: SwapExecuted,
         Mint: Mint,
+        Flash: Flash,
     }
 
     /// @notice Emitted exactly once by a pool when #initialize is first called on the pool
@@ -97,6 +107,13 @@ mod YASPool {
         amount_0: u256,
         amount_1: u256
     }
+    #[derive(Drop, starknet::Event)]
+    struct Flash {
+        sender: ContractAddress,
+        amount0: u256,
+        amount1: u256
+    }
+
 
     #[derive(Copy, Drop, Serde, starknet::Store)]
     struct Slot0 {
@@ -217,6 +234,32 @@ mod YASPool {
             self.unlocked.write(true);
 
             self.emit(Initialize { sqrt_price_X96, tick: slot_0.tick });
+        }
+        fn flash(ref self: ContractState,amount0: u256,amount1: u256, data: Array<felt252>){
+            let flash_fee:u256 = self.fee.read().into();
+    
+            let fee0:u256 = FullMath::mul_div(amount0,flash_fee,1000000); 
+            let fee1:u256 = FullMath::mul_div(amount1,flash_fee,1000000);
+            let balance0Before:u256 = self.balance_0();
+            let balance1Before:u256 = self.balance_1();
+
+            let callback_contract = get_caller_address();
+            assert(is_valid_callback_contract(callback_contract),'invalid callback_contract');
+            if amount0>0 {IERC20Dispatcher{contract_address: self.token_0.read() }.transfer(callback_contract,amount0);}
+            if amount1>0 {IERC20Dispatcher{contract_address: self.token_1.read() }.transfer(callback_contract,amount1);}
+            let dispatcher = IYASFlashCallbackDispatcher { contract_address: callback_contract};
+            dispatcher.yas_flash_callback(amount0,amount1,data);
+
+            assert(self.balance_0() < balance0Before + fee0,'Flash Loan Not Paid' );
+            assert(self.balance_1() < balance1Before + fee1,'Flash Loan Not Paid' );
+            self
+                .emit(
+                    Flash {
+                        sender: get_caller_address(),
+                        amount0,
+                        amount1
+                    }
+                );
         }
 
         fn swap(

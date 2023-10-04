@@ -21,3 +21,6 @@ deploy:
 
 test:
 	scarb test
+
+test_flash:
+	scarb test -f Flash
